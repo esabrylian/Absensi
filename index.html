@@ -120,7 +120,7 @@ video,.prev{width:100%;border-radius:12px;background:#000;display:block;aspect-r
 <script>
 const $=s=>document.querySelector(s);
 const ls={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
-const DEFAULT_CFG={company:'PT Putra Septia Mandiri',code:'PT-PUTRA-SEPTIA',url:'https://script.google.com/macros/s/AKfycbz4vTNbcu_eC6iJL4q7th_1sQSiheosS2LVPArTBbnET2OWUTWOfz1XVHa4iSY6kEZe/exec',lat:0,lng:0,radius:0}; // isi sebelum diunggah
+const DEFAULT_CFG={company:'PT Putra Septia Mandiri',code:'PT-PUTRA-SEPTIA',url:'https://script.google.com/macros/s/AKfycbzSfHGycKNgeDkztaBYvDu71xDRzMMU2k78MZpqPGk7ciWjZpAgMPBZ3Gn1hoQUiBKV/exec',lat:0,lng:0,radius:0}; // isi sebelum diunggah
 let cfg=Object.assign({},DEFAULT_CFG,ls.get('cfg',{}));
 let sess=ls.get('sess',null);const user={get name(){return sess?sess.name:''}};
 let recs=ls.get('recs',[]);
