@@ -42,21 +42,33 @@ video,.prev{width:100%;border-radius:12px;background:#000;display:block;aspect-r
 <body>
 <div class="app">
 
-<section id="v-home">
-  <div class="hero">
+<div class="hero" id="hero">
     <div class="logo" id="logo">P</div>
     <h1 id="co">PT Nama Perusahaan</h1>
     <div class="sub">Aplikasi Absensi Karyawan</div>
     <div class="clock" id="clock"></div>
     <div class="sub" id="date"></div>
-  </div>
+</div>
+
+<section id="v-login" class="hide">
   <div class="card">
-    <label>Nama karyawan</label><input id="name" placeholder="Nama lengkap" autocomplete="name">
+    <label>Username</label><input id="lu" autocomplete="username" autocapitalize="none">
+    <label>Password</label><input id="lp" type="password" autocomplete="current-password">
+    <button id="lbtn">Masuk</button>
+    <button class="sec" id="adm">Pengaturan Admin</button>
+    <div class="sub" id="lmsg" style="margin-top:8px"></div>
+  </div>
+</section>
+
+<section id="v-home" class="hide">
+  <div class="card">
+    <div class="sub">Halo,</div><h1 id="hello" style="margin-bottom:6px"></h1>
     <label>Jenis absen</label>
     <div class="seg"><button id="tIn" class="on">Masuk</button><button id="tOut">Pulang</button></div>
     <button id="go">Mulai Absen</button>
     <button class="sec" id="hist">Riwayat Absen</button>
-    <button class="sec" id="set">Pengaturan</button>
+    <button class="sec hide" id="set">Pengaturan</button>
+    <button class="sec" id="logout">Keluar</button>
   </div>
 </section>
 
@@ -94,8 +106,10 @@ video,.prev{width:100%;border-radius:12px;background:#000;display:block;aspect-r
     <label>Nama PT / Perusahaan</label><input id="cName">
     <label>Isi kode barcode yang valid</label><input id="cCode">
     <div class="sub" style="margin-top:6px">Buat QR/barcode berisi teks kode ini (mis. lewat generator QR), lalu cetak dan tempel di lokasi absen.</div>
+    <label>Lokasi kantor (lat, lng) dan radius meter (0 = nonaktif)</label>
+    <input id="cLat" placeholder="Latitude" inputmode="decimal"><input id="cLng" placeholder="Longitude" inputmode="decimal" style="margin-top:6px"><input id="cRad" placeholder="Radius meter, mis. 100" inputmode="numeric" style="margin-top:6px">
+    <button class="sec" id="cGeo">Pakai lokasi saya sekarang</button>
     <label>URL backend (Google Apps Script)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/.../exec">
-    <label>Token rahasia (sama dengan di script)</label><input id="cTok">
     <button id="cSave">Simpan</button>
   </div>
 </section>
@@ -106,18 +120,19 @@ video,.prev{width:100%;border-radius:12px;background:#000;display:block;aspect-r
 <script>
 const $=s=>document.querySelector(s);
 const ls={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
-let cfg=ls.get('cfg',{company:'PT Nama Perusahaan',code:'ABSEN-KANTOR',url:'',token:''});
-let user=ls.get('user',{name:'',id:''});
+const DEFAULT_CFG={company:'PT Putra Septia Mandiri',code:'PT-PUTRA-SEPTIA',url:'https://script.google.com/macros/s/AKfycbz4vTNbcu_eC6iJL4q7th_1sQSiheosS2LVPArTBbnET2OWUTWOfz1XVHa4iSY6kEZe/exec',lat:0,lng:0,radius:0}; // isi sebelum diunggah
+let cfg=Object.assign({},DEFAULT_CFG,ls.get('cfg',{}));
+let sess=ls.get('sess',null);const user={get name(){return sess?sess.name:''}};
 let recs=ls.get('recs',[]);
 let type='Masuk',stream=null,raf=null,shot=null,view='home';
 const pad=n=>String(n).padStart(2,'0');
 const fmt=d=>`${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400)}
-function show(id){stopCam();view=id;document.querySelectorAll('section').forEach(s=>s.classList.add('hide'));$('#v-'+id).classList.remove('hide');window.scrollTo(0,0)}
+function show(id){stopCam();view=id;$('#hero').classList.toggle('hide',!['login','home'].includes(id));document.querySelectorAll('section').forEach(s=>s.classList.add('hide'));$('#v-'+id).classList.remove('hide');window.scrollTo(0,0)}
 function applyCfg(){$('#co').textContent=cfg.company;$('#logo').textContent=(cfg.company.replace(/^PT\.?\s*/i,'')[0]||'P').toUpperCase();document.title=cfg.company+' - Absensi'}
 function tick(){const d=new Date();$('#clock').textContent=`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;$('#date').textContent=d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
 setInterval(tick,1000);tick();applyCfg();
-$('#name').value=user.name;
+
 
 async function startCam(video,facing){
   stopCam();
@@ -130,14 +145,13 @@ function stopCam(){cancelAnimationFrame(raf);if(stream){stream.getTracks().forEa
 
 $('#tIn').onclick=()=>{type='Masuk';$('#tIn').classList.add('on');$('#tOut').classList.remove('on')};
 $('#tOut').onclick=()=>{type='Pulang';$('#tOut').classList.add('on');$('#tIn').classList.remove('on')};
-document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>show('home'));
-$('#set').onclick=()=>{$('#cName').value=cfg.company;$('#cCode').value=cfg.code;$('#cUrl').value=cfg.url||'';$('#cTok').value=cfg.token||'';show('set')};
-$('#cSave').onclick=()=>{const n=$('#cName').value.trim(),c=$('#cCode').value.trim();if(!n||!c)return toast('Isi semua kolom');cfg={company:n,code:c,url:$('#cUrl').value.trim(),token:$('#cTok').value.trim()};ls.set('cfg',cfg);applyCfg();toast('Tersimpan');show('home')};
+document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>show(sess?'home':'login'));
+function openSet(){$('#cName').value=cfg.company;$('#cCode').value=cfg.code;$('#cUrl').value=cfg.url||'';$('#cLat').value=cfg.lat||'';$('#cLng').value=cfg.lng||'';$('#cRad').value=cfg.radius||'';show('set')}
+$('#set').onclick=openSet;
+$('#cSave').onclick=()=>{const n=$('#cName').value.trim(),c=$('#cCode').value.trim();if(!n||!c)return toast('Isi semua kolom');cfg={company:n,code:c,url:$('#cUrl').value.trim(),lat:parseFloat($('#cLat').value)||0,lng:parseFloat($('#cLng').value)||0,radius:parseInt($('#cRad').value)||0};ls.set('cfg',cfg);applyCfg();toast('Tersimpan');show(sess?'home':'login')};
 
 $('#go').onclick=async()=>{
-  user={name:$('#name').value.trim()};
-  if(!user.name)return toast('Isi nama dulu');
-  ls.set('user',user);show('scan');
+  show('scan');
   if(await startCam($('#vs'),'environment'))scanLoop();
 };
 let det=null;try{if('BarcodeDetector' in window)det=new BarcodeDetector()}catch(e){}
@@ -159,7 +173,7 @@ function scanLoop(){
   step();
 }
 function verify(val){
-  if(val.trim()===cfg.code){toast('Barcode valid ✓');toSelfie();return true}
+  if(val.trim()===cfg.code){toast('Barcode valid ✓');gate();return true}
   $('#scanmsg').textContent='Kode tidak sesuai: '+val.slice(0,30);return false;
 }
 $('#mbtn').onclick=()=>{const v=$('#manual').value;if(!verify(v))toast('Kode salah')};
@@ -188,32 +202,70 @@ $('#snap').onclick=()=>{const v=$('#vf');if(!v.videoWidth)return toast('Kamera b
 $('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>setShot(stamp(im,im.width,im.height));im.src=URL.createObjectURL(f)};
 $('#retake').onclick=toSelfie;
 $('#save').onclick=()=>{
-  recs.unshift({ts:shot.ts,type,name:user.name,img:shot.data});
+  recs.unshift({ts:shot.ts,type,name:user.name,u:sess.u,lat:geo?geo.lat:null,lng:geo?geo.lng:null,img:shot.data});
   if(recs.length>60)recs.length=60;
   if(!ls.set('recs',recs))toast('Penyimpanan penuh, riwayat lama dihapus');
   toast('Absen '+type+' tersimpan ✓');show('home');flush();
 };
+async function api(b){const x=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)});return await x.json()}
 async function send(r){
-  if(!cfg.url)return false;
-  try{await fetch(cfg.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({token:cfg.token,ts:r.ts,type:r.type,name:r.name,img:r.img})});r.sent=true;return true}catch(e){return false}
+  if(!cfg.url||!sess||r.u!==sess.u)return false;
+  try{const d=await api({action:'absen',u:r.u,sig:sess.sig,ts:r.ts,type:r.type,lat:r.lat,lng:r.lng,img:r.img});
+    if(d.ok){r.sent=true;return true}
+    if(/area/.test(d.msg||'')){r.rej=1;toast(d.msg)}
+    if(d.msg==='auth'){toast('Sesi habis, silakan login ulang');sess=null;ls.set('sess',null);show('login')}
+  }catch(e){}
+  return false;
 }
-async function flush(){let ch=false;for(const r of recs.slice().reverse()){if(!r.sent&&await send(r))ch=true}if(ch)ls.set('recs',recs)}
+async function flush(){let ch=false;for(const r of recs.slice().reverse()){if(!r.sent&&!r.rej&&await send(r))ch=true}if(ch)ls.set('recs',recs)}
 addEventListener('online',flush);flush();
 $('#hist').onclick=()=>{
   const l=$('#list');
-  l.innerHTML=recs.length?'':'<div class="sub">Belum ada riwayat.</div>';
-  recs.forEach(r=>{
+  l.innerHTML=recs.some(x=>x.u===sess.u)?'':'<div class="sub">Belum ada riwayat.</div>';
+  recs.filter(x=>x.u===sess.u).forEach(r=>{
     const d=document.createElement('div');d.className='rec';
     const im=document.createElement('img');im.src=r.img;im.alt='';
     const t=document.createElement('div');
     t.innerHTML='<b></b><small></small>';
     t.querySelector('b').textContent=r.name;
     const tg=document.createElement('span');tg.className='tag'+(r.type==='Pulang'?' out':'');tg.textContent=r.type;t.querySelector('b').appendChild(tg);
-    t.querySelector('small').textContent=fmt(new Date(r.ts))+(r.sent?' · terkirim':' · belum terkirim');
+    t.querySelector('small').textContent=fmt(new Date(r.ts))+(r.sent?' · terkirim':r.rej?' · ditolak (di luar area)':' · belum terkirim');
     d.append(im,t);l.appendChild(d);
   });
   show('hist');
 };
+let geo=null;
+function getGeo(){return new Promise(res=>{if(!navigator.geolocation)return res(null);navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude}),()=>res(null),{enableHighAccuracy:true,timeout:15000,maximumAge:0})})}
+function dist(a,b,c,d){const t=x=>x*Math.PI/180,h=Math.sin(t(c-a)/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(t(d-b)/2)**2;return Math.round(12742000*Math.asin(Math.sqrt(h)))}
+async function gate(){
+  stopCam();toast('Memeriksa lokasi...');
+  geo=await getGeo();
+  if(cfg.radius>0){
+    if(!geo){toast('Lokasi tidak terdeteksi. Aktifkan GPS dan izinkan lokasi.');return show('home')}
+    const m=dist(cfg.lat,cfg.lng,geo.lat,geo.lng);
+    if(m>cfg.radius){toast('Di luar area absen ('+m+' m dari lokasi)');return show('home')}
+  }
+  toSelfie();
+}
+$('#cGeo').onclick=async()=>{const g=await getGeo();if(!g)return toast('Lokasi tidak terdeteksi');$('#cLat').value=g.lat.toFixed(6);$('#cLng').value=g.lng.toFixed(6);toast('Lokasi terisi')};
+let wantSet=false;
+function enter(){$('#hello').textContent=sess.name;$('#set').classList.toggle('hide',sess.role!=='admin');show('home')}
+$('#adm').onclick=()=>{if(!cfg.url)return openSet();wantSet=true;$('#lmsg').textContent='Login sebagai admin untuk membuka pengaturan.'};
+$('#lbtn').onclick=async()=>{
+  const u=$('#lu').value.trim().toLowerCase(),p=$('#lp').value;
+  if(!cfg.url)return $('#lmsg').textContent='URL backend belum diatur. Hubungi admin.';
+  if(!u||!p)return toast('Isi username dan password');
+  $('#lmsg').textContent='Memeriksa...';
+  try{
+    const d=await api({action:'login',u,p});
+    if(!d.ok){wantSet=false;$('#lmsg').textContent=d.msg||'Login gagal';return}
+    if(wantSet){wantSet=false;if(d.role!=='admin'){$('#lmsg').textContent='Hanya admin yang boleh membuka pengaturan.';return}
+      sess=d;ls.set('sess',sess);$('#lp').value='';$('#lmsg').textContent='';enter();openSet();return}
+    sess=d;ls.set('sess',sess);$('#lp').value='';$('#lmsg').textContent='';enter();flush();
+  }catch(e){$('#lmsg').textContent='Tidak bisa terhubung ke server'}
+};
+$('#logout').onclick=()=>{sess=null;ls.set('sess',null);$('#lmsg').textContent='';show('login')};
+sess?enter():show('login');
 </script>
 </body>
 </html>
