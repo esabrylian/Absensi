@@ -121,7 +121,7 @@ video,.prev{width:100%;border-radius:12px;background:#000;display:block;aspect-r
 const $=s=>document.querySelector(s);
 const ls={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
 const DEFAULT_CFG={company:'PT Putra Septia Mandiri',code:'PT-PUTRA-SEPTIA',url:'https://script.google.com/macros/s/AKfycbxBjQdKW8VoueJexBCzqNIuW9yEdUc3YluXI8YLmfIIwCXdpqyoNlcW01z6Y8Kf5DnU/exec',lat:0,lng:0,radius:0}; // isi sebelum diunggah
-let cfg=Object.assign({},DEFAULT_CFG,ls.get('cfg',{}));
+let cfg=Object.assign({},DEFAULT_CFG,ls.get('cfg',{}));if(DEFAULT_CFG.url)cfg.url=DEFAULT_CFG.url;
 let sess=ls.get('sess',null);const user={get name(){return sess?sess.name:''}};
 let recs=ls.get('recs',[]);
 let type='Masuk',stream=null,raf=null,shot=null,view='home';
